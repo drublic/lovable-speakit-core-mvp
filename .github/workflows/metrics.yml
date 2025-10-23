@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'add/**'
+      - 'copilot/**'
   workflow_dispatch:
 
 jobs:
