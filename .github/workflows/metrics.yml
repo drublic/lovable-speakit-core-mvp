@@ -1,0 +1,55 @@
+name: Repository Metrics
+
+on:
+  push:
+    branches:
+      - main
+      - 'add/**'
+      - 'copilot/**'
+  workflow_dispatch:
+
+jobs:
+  generate-metrics:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          
+      - name: Install cloc (Lines of Code counter)
+        run: sudo apt-get update && sudo apt-get install -y cloc
+        
+      - name: Install lizard (Cyclomatic complexity analyzer)
+        run: pip3 install lizard
+        
+      - name: Install jq (JSON processor for summary)
+        run: sudo apt-get install -y jq
+        
+      - name: Make generate-metrics.sh executable
+        run: chmod +x scripts/generate-metrics.sh
+        
+      - name: Generate metrics
+        run: ./scripts/generate-metrics.sh
+        
+      - name: Print summary to Actions log
+        run: |
+          echo "=== Repository Metrics Summary ==="
+          cat metrics/summary.txt
+          echo "=================================="
+          
+      - name: Upload metrics artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-metrics
+          path: metrics/
+          retention-days: 90
