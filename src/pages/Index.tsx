@@ -14,6 +14,7 @@ const Index = () => {
   const [title, setTitle] = useState<string>("");
   const [sourceType, setSourceType] = useState<"url" | "pdf">("url");
   const [sourceUrl, setSourceUrl] = useState<string | undefined>();
+  const [historyId, setHistoryId] = useState<string>("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -53,6 +54,7 @@ const Index = () => {
     setTitle(extractedTitle);
     setSourceType(type);
     setSourceUrl(url);
+    setHistoryId(crypto.randomUUID()); // Generate session ID for guest mode
   };
 
   if (content) {
@@ -63,6 +65,7 @@ const Index = () => {
         sourceType={sourceType}
         sourceUrl={sourceUrl}
         userId={user?.id}
+        historyId={historyId}
       />
     );
   }
@@ -113,16 +116,22 @@ const Index = () => {
 
           <ContentInput onContentExtracted={handleContentExtracted} />
 
-          {!user && (
-            <div className="text-center p-6 bg-muted/50 rounded-lg border border-dashed">
-              <p className="text-sm text-muted-foreground mb-3">
-                Sign in to save your reading history and bookmarks across devices
+          <div className="text-center p-6 bg-muted/50 rounded-lg border border-dashed">
+            {user ? (
+              <p className="text-sm text-muted-foreground">
+                Your reading history and bookmarks are saved across all your devices
               </p>
-              <Button onClick={() => navigate("/auth")} variant="default">
-                Create Free Account
-              </Button>
-            </div>
-          )}
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-3">
+                  You're using Guest Mode. Sign in to save your reading history and bookmarks across devices
+                </p>
+                <Button onClick={() => navigate("/auth")} variant="default">
+                  Create Free Account
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </main>
     </div>

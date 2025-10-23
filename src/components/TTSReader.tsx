@@ -4,9 +4,10 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, Square, Volume2, Sparkles } from "lucide-react";
+import { Play, Pause, Square, Volume2, Sparkles, Bookmark, BookmarkCheck, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useGuestStorage } from "@/hooks/useGuestStorage";
 
 interface TTSReaderProps {
   content: string;
@@ -14,9 +15,10 @@ interface TTSReaderProps {
   sourceType: "url" | "pdf";
   sourceUrl?: string;
   userId?: string;
+  historyId: string;
 }
 
-export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTSReaderProps) => {
+export const TTSReader = ({ content, title, sourceType, sourceUrl, userId, historyId }: TTSReaderProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [speed, setSpeed] = useState([1.0]);
@@ -24,9 +26,12 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [summary, setSummary] = useState<string>("");
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [hasBookmark, setHasBookmark] = useState(false);
+  const [autoPlayAttempted, setAutoPlayAttempted] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const wordsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { addToHistory, saveBookmark, getBookmark } = useGuestStorage();
 
   const words = content.split(/\s+/).filter(word => word.length > 0);
 
@@ -44,10 +49,21 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
 
-    // Save to reading history if authenticated
+    // Save to reading history (authenticated or guest)
     if (userId) {
       saveToHistory();
+    } else {
+      // Guest mode - save to localStorage
+      addToHistory({
+        title,
+        source_type: sourceType,
+        source_url: sourceUrl,
+        content_preview: content.substring(0, 200),
+      });
     }
+
+    // Check for existing bookmark
+    checkForBookmark();
 
     return () => {
       window.speechSynthesis.cancel();
@@ -64,6 +80,17 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
     }
   }, [currentWordIndex]);
 
+  // Auto-play once voices are loaded
+  useEffect(() => {
+    if (voices.length > 0 && voice && !autoPlayAttempted) {
+      setAutoPlayAttempted(true);
+      // Small delay to ensure everything is ready
+      setTimeout(() => {
+        handlePlay();
+      }, 500);
+    }
+  }, [voices, voice, autoPlayAttempted]);
+
   const saveToHistory = async () => {
     try {
       await supabase.from("reading_history").insert({
@@ -75,6 +102,87 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
       });
     } catch (error) {
       console.error("Error saving to history:", error);
+    }
+  };
+
+  const checkForBookmark = async () => {
+    if (userId) {
+      try {
+        const { data } = await supabase
+          .from("bookmarks")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("history_id", historyId)
+          .single();
+        
+        if (data) {
+          setHasBookmark(true);
+          setCurrentWordIndex(data.position);
+        }
+      } catch (error) {
+        // No bookmark found
+      }
+    } else {
+      // Guest mode
+      const bookmark = getBookmark(historyId);
+      if (bookmark) {
+        setHasBookmark(true);
+        setCurrentWordIndex(bookmark.position);
+      }
+    }
+  };
+
+  const handleSaveBookmark = async () => {
+    if (userId) {
+      try {
+        // Check if bookmark exists
+        const { data: existing } = await supabase
+          .from("bookmarks")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("history_id", historyId)
+          .single();
+
+        if (existing) {
+          // Update
+          await supabase
+            .from("bookmarks")
+            .update({
+              position: currentWordIndex,
+              total_words: words.length,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+        } else {
+          // Insert
+          await supabase.from("bookmarks").insert({
+            user_id: userId,
+            history_id: historyId,
+            position: currentWordIndex,
+            total_words: words.length,
+          });
+        }
+
+        setHasBookmark(true);
+        toast({
+          title: "Bookmark saved",
+          description: "Your position has been saved",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to save bookmark",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Guest mode
+      saveBookmark(historyId, currentWordIndex, words.length);
+      setHasBookmark(true);
+      toast({
+        title: "Bookmark saved",
+        description: "Your position has been saved for this session",
+      });
     }
   };
 
@@ -149,9 +257,20 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl md:text-4xl font-bold gradient-text">{title}</h1>
-          <Progress value={progress} className="h-2" />
+        <div className="space-y-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.location.reload()}
+            className="mb-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Home
+          </Button>
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl md:text-4xl font-bold gradient-text">{title}</h1>
+            <Progress value={progress} className="h-2" />
+          </div>
         </div>
 
         {/* Controls */}
@@ -182,6 +301,15 @@ export const TTSReader = ({ content, title, sourceType, sourceUrl, userId }: TTS
               >
                 <Sparkles className="w-4 h-4" />
                 {loadingSummary ? "Generating..." : "Summarize"}
+              </Button>
+              <Button
+                onClick={handleSaveBookmark}
+                size="lg"
+                variant={hasBookmark ? "default" : "outline"}
+                className="gap-2"
+              >
+                {hasBookmark ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                {hasBookmark ? "Saved" : "Bookmark"}
               </Button>
             </div>
           </div>
