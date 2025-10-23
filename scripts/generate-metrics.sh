@@ -41,6 +41,24 @@ else
   }
 fi
 
+# Run Plato for Maintainability Index on compiled JavaScript
+echo "Running Plato for Maintainability Index on compiled JavaScript..."
+PLATO_DIRS=""
+for dir in dist build lib; do
+  if [ -d "$dir" ] && find "$dir" -name "*.js" -type f | grep -q .; then
+    PLATO_DIRS="$PLATO_DIRS \"$dir/**/*.js\""
+  fi
+done
+
+if [ -n "$PLATO_DIRS" ]; then
+  echo "Found compiled JavaScript in: $PLATO_DIRS"
+  eval "npx --yes plato -r -d metrics/plato-report $PLATO_DIRS" || {
+    echo "Warning: Plato failed to generate report"
+  }
+else
+  echo "No compiled JavaScript found in dist/, build/, or lib/ directories"
+fi
+
 # Generate summary file
 echo "Generating summary..."
 
