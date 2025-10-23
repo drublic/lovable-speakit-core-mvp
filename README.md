@@ -60,6 +60,39 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Repository Metrics
+
+This repository includes automated metrics generation via GitHub Actions. The workflow analyzes code quality metrics including:
+
+- **Lines of Code (LOC)**: Total lines of code, comments, and blank lines
+- **Cyclomatic Complexity**: Measure of code complexity at function and file level
+- **Top Complex Functions**: Identifies functions that may need refactoring
+
+### Running Metrics Locally
+
+To generate metrics on your local machine:
+
+```sh
+# Install required tools (Ubuntu/Debian)
+sudo apt-get install -y cloc jq
+pip3 install lizard
+
+# Generate metrics
+./scripts/generate-metrics.sh
+
+# View the summary
+cat metrics/summary.txt
+```
+
+### Viewing Metrics in GitHub Actions
+
+The metrics workflow runs automatically on pushes to `main` and can be triggered manually:
+
+1. Go to the "Actions" tab in GitHub
+2. Select the "Repository Metrics" workflow
+3. Click "Run workflow" to manually trigger it
+4. Once complete, download the "repository-metrics" artifact to view detailed results
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/15cdc6cf-2acb-4a2a-b76b-89cddccf2d36) and click on Share -> Publish.
